@@ -1,0 +1,21 @@
+Pada suatu hari di sebuah desa kecil di kaki gunung, hiduplah seorang anak
+bernama Rian. Ia senang belajar hal baru, terutama tentang komputer dan
+mesin. Setiap sore, Rian duduk di teras rumahnya sambil membaca buku dan
+membayangkan bagaimana cara kerja sebuah mesin yang bisa berpikir.
+
+Suatu ketika, Rian menemukan sebuah komputer tua di gudang kakeknya. Ia
+membersihkan debu yang menempel dan mencoba menyalakannya. Setelah
+beberapa saat menunggu, layar komputer itu menyala dan menampilkan tulisan
+sederhana. Rian tersenyum lebar, merasa telah menemukan harta karun.
+
+Dari hari ke hari, Rian belajar menulis kode sedikit demi sedikit. Ia
+mulai dari perintah paling sederhana, lalu perlahan memahami bagaimana
+program bisa mengambil keputusan, mengulang perintah, dan menyimpan data.
+Ia juga belajar bahwa sebuah model bisa belajar dari banyak contoh teks,
+lalu menebak kata berikutnya berdasarkan pola yang sudah dipelajarinya.
+
+Rian percaya bahwa dengan latihan yang cukup dan data yang baik, mesin
+kecil buatannya suatu hari nanti bisa menulis cerita sendiri, menjawab
+pertanyaan, bahkan membantu orang lain belajar seperti dirinya dulu.
+Ia pun bertekad untuk terus mencoba, memperbaiki kesalahan, dan tidak
+menyerah walaupun hasil pertamanya masih jauh dari sempurna.
