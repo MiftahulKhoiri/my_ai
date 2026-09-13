@@ -31,12 +31,29 @@ class Trainer:
             shuffle=True,
             drop_last=True,
         )
+        if len(self.train_loader) == 0:
+            raise ValueError(
+                "Dataset training kosong/lebih kecil dari batch_size — training "
+                "tidak bisa jalan (max_steps akan jadi 0 dan diam-diam tidak "
+                "melatih apa pun). Perkecil batch_size atau max_seq_len, atau "
+                "tambah data training."
+            )
+
         self.val_loader = DataLoader(
             val_dataset,
             batch_size=config.training.batch_size,
             shuffle=False,
             drop_last=True,
         )
+        if len(self.val_loader) == 0:
+            tqdm.write(
+                "[peringatan] Dataset validasi kosong/lebih kecil dari batch_size "
+                "(sering terjadi kalau teks validasi lebih pendek dari max_seq_len, "
+                "atau val_split terlalu kecil). Metrik eval (loss/ppl/acc) akan "
+                "SELALU 0.0000 dan TIDAK VALID selama ini terjadi — best.pt dipilih "
+                "tanpa dasar yang benar. Perkecil max_seq_len, perbesar val_split, "
+                "atau sediakan data validasi terpisah."
+            )
 
         self.optimizer = build_optimizer(
             self.model, config.training.learning_rate, config.training.weight_decay
