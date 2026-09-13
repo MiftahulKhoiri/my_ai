@@ -113,7 +113,7 @@ class Trainer:
                 x, y = next(data_iter)
                 x, y = x.to(self.device), y.to(self.device)
 
-                _, loss = self.model(x, y)
+                _, loss, _ = self.model(x, y)
                 (loss / accum_steps).backward()
                 accum_loss += loss.item()
 
