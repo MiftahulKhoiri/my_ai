@@ -1,6 +1,8 @@
 """
 model/transformer.py — TransformerBlock (pre-norm attention + pre-norm FFN)
-dan model decoder-only penuh (gaya GPT) untuk language modeling.
+dan model decoder-only penuh (gaya GPT) untuk language modeling, dengan
+dukungan KV-cache supaya generate() tidak perlu mengulang seluruh konteks
+di setiap langkah.
 """
 
 import torch
@@ -22,10 +24,11 @@ class TransformerBlock(nn.Module):
         self.ln2 = nn.LayerNorm(d_model)
         self.ff = FeedForward(d_model, d_ff, dropout)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.ln1(x))
+    def forward(self, x: torch.Tensor, past_kv=None, use_cache: bool = False):
+        attn_out, present_kv = self.attn(self.ln1(x), past_kv=past_kv, use_cache=use_cache)
+        x = x + attn_out
         x = x + self.ff(self.ln2(x))
-        return x
+        return x, present_kv
 
 
 class TransformerLM(nn.Module):
@@ -55,17 +58,26 @@ class TransformerLM(nn.Module):
 
         self.apply(init_weights)
 
-    def forward(self, idx: torch.Tensor, targets: torch.Tensor = None):
-        x = self.embed(idx)
-        for block in self.blocks:
-            x = block(x)
+    def forward(self, idx: torch.Tensor, targets: torch.Tensor = None, past_kv=None, use_cache: bool = False):
+        # start_pos = panjang cache sejauh ini (0 kalau belum ada cache),
+        # supaya positional embedding token baru tetap absolut & konsisten.
+        start_pos = past_kv[0][0].size(2) if past_kv is not None else 0
+        x = self.embed(idx, start_pos=start_pos)
+
+        new_kv = [] if use_cache else None
+        for i, block in enumerate(self.blocks):
+            layer_past = past_kv[i] if past_kv is not None else None
+            x, present = block(x, past_kv=layer_past, use_cache=use_cache)
+            if use_cache:
+                new_kv.append(present)
+
         x = self.ln_f(x)
         logits = self.head(x)
 
         loss = None
         if targets is not None:
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
-        return logits, loss
+        return logits, loss, new_kv
 
     @torch.no_grad()
     def generate(
@@ -75,14 +87,35 @@ class TransformerLM(nn.Module):
         temperature: float = 1.0,
         top_k: int = None,
     ) -> torch.Tensor:
-        """Generate token baru secara autoregresif dari konteks awal `idx`."""
+        """Generate token baru secara autoregresif memakai KV-cache.
+
+        Prompt awal diproses sekali saja (prefill, membangun cache), lalu
+        tiap token baru cukup satu forward pass ringan atas 1 token (bukan
+        mengulang seluruh konteks dari awal setiap langkah seperti versi
+        sebelumnya). Total posisi (prompt + token baru) dibatasi ke
+        `max_seq_len`; kalau limit itu tercapai, generate berhenti lebih
+        awal dan memberi peringatan, bukan diam-diam memotong konteks.
+        """
         was_training = self.training
         self.eval()
-        for _ in range(max_new_tokens):
-            idx_cond = idx[:, -self.config.max_seq_len:]
-            logits, _ = self(idx_cond)
-            logits = logits[:, -1, :] / max(temperature, 1e-5)
 
+        max_len = self.config.max_seq_len
+        if idx.size(1) >= max_len:
+            idx = idx[:, -(max_len - 1):]
+
+        allowed_new_tokens = max_len - idx.size(1)
+        if max_new_tokens > allowed_new_tokens:
+            print(
+                f"[peringatan] max_new_tokens dipotong dari {max_new_tokens} ke "
+                f"{allowed_new_tokens} karena batas max_seq_len={max_len}"
+            )
+            max_new_tokens = allowed_new_tokens
+
+        # --- Prefill: proses seluruh prompt sekali, bangun cache awal ---
+        logits, _, past_kv = self(idx, use_cache=True)
+        logits = logits[:, -1, :] / max(temperature, 1e-5)
+
+        for _ in range(max_new_tokens):
             if top_k is not None:
                 v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
                 logits[logits < v[:, [-1]]] = float("-inf")
@@ -90,5 +123,10 @@ class TransformerLM(nn.Module):
             probs = F.softmax(logits, dim=-1)
             next_id = torch.multinomial(probs, num_samples=1)
             idx = torch.cat([idx, next_id], dim=1)
+
+            # --- Decode 1 token baru pakai cache, bukan ulang dari awal ---
+            logits, _, past_kv = self(next_id, past_kv=past_kv, use_cache=True)
+            logits = logits[:, -1, :] / max(temperature, 1e-5)
+
         self.train(was_training)
         return idx
