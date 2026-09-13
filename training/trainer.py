@@ -1,7 +1,8 @@
 """
-training/trainer.py — Loop training utama: iterasi batch, forward-backward,
-logging berkala (ke terminal + file JSONL), evaluasi berkala di data
-validasi, dan checkpointing berkala. Progress bar memakai tqdm.
+training/trainer.py — Loop training utama: iterasi batch, forward-backward
+(dengan dukungan gradient accumulation), logging berkala (ke terminal + file
+JSONL), evaluasi berkala di data validasi, dan checkpointing berkala.
+Progress bar memakai tqdm.
 """
 
 import json
@@ -98,16 +99,26 @@ class Trainer:
         cfg = self.config.training
         data_iter = self._infinite_loader()
         t0 = time.time()
+        accum_steps = max(1, cfg.grad_accum_steps)
 
         progress = tqdm(total=self.max_steps, initial=self.step, desc="training", unit="step")
         while self.step < self.max_steps:
-            x, y = next(data_iter)
-            x, y = x.to(self.device), y.to(self.device)
-
-            _, loss = self.model(x, y)
-
             self.optimizer.zero_grad(set_to_none=True)
-            loss.backward()
+            accum_loss = 0.0
+
+            # Satu "step" logis = grad_accum_steps micro-batch, diakumulasi
+            # sebelum optimizer.step(). Ini memperbesar batch efektif jadi
+            # (batch_size * grad_accum_steps) tanpa menambah RAM per micro-batch.
+            for _ in range(accum_steps):
+                x, y = next(data_iter)
+                x, y = x.to(self.device), y.to(self.device)
+
+                _, loss = self.model(x, y)
+                (loss / accum_steps).backward()
+                accum_loss += loss.item()
+
+            avg_loss = accum_loss / accum_steps
+
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), cfg.grad_clip)
             self.optimizer.step()
             self.scheduler.step()
@@ -117,8 +128,8 @@ class Trainer:
             if self.step % cfg.log_every == 0:
                 dt = time.time() - t0
                 lr = self.scheduler.get_last_lr()[0]
-                tqdm.write(f"step {self.step:6d} | loss {loss.item():.4f} | lr {lr:.2e} | {dt:.1f}s")
-                self._log({"event": "train", "loss": loss.item(), "lr": lr})
+                tqdm.write(f"step {self.step:6d} | loss {avg_loss:.4f} | lr {lr:.2e} | {dt:.1f}s")
+                self._log({"event": "train", "loss": avg_loss, "lr": lr})
                 t0 = time.time()
 
             should_eval = (self.step > 0 and self.step % cfg.eval_every == 0) or is_last_step
