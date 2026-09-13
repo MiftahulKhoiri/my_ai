@@ -5,13 +5,15 @@ Contoh pemakaian:
     python train.py
     python train.py --train_path data/train.txt --epochs 10 --device cuda
     python train.py --grad_accum_steps 4 --num_threads 4
+    python train.py --tokenizer char          # pakai tokenizer level karakter (lama)
+    python train.py --bpe_vocab_size 2048      # ukuran vocab BPE lebih besar
 """
 
 import argparse
 import torch
 
 from config import Config
-from data.tokenizer import CharTokenizer
+from data import get_tokenizer_class
 from data.dataset import make_train_val_datasets, load_text
 from model.transformer import TransformerLM
 from training.trainer import Trainer
@@ -39,6 +41,14 @@ def parse_args():
         "--num_threads", type=int, default=None,
         help="Jumlah thread CPU intra-op PyTorch (mis. 4 di Raspberry Pi 5). "
              "Default: biarkan PyTorch auto-detect.",
+    )
+    p.add_argument(
+        "--tokenizer", type=str, default=None, choices=["bpe", "char"],
+        help="Jenis tokenizer: 'bpe' (default, lebih hemat data) atau 'char' (level karakter).",
+    )
+    p.add_argument(
+        "--bpe_vocab_size", type=int, default=None,
+        help="Target ukuran vocab BPE (dipakai kalau --tokenizer bpe).",
     )
     return p.parse_args()
 
@@ -71,6 +81,10 @@ def apply_overrides(config: Config, args) -> Config:
         config.training.grad_accum_steps = args.grad_accum_steps
     if args.num_threads is not None:
         config.training.num_threads = args.num_threads
+    if args.tokenizer is not None:
+        config.data.tokenizer = args.tokenizer
+    if args.bpe_vocab_size is not None:
+        config.data.bpe_vocab_size = args.bpe_vocab_size
     return config
 
 
@@ -86,14 +100,21 @@ def main():
     print(f"PyTorch memakai {torch.get_num_threads()} thread CPU")
 
     # --- Tokenizer: fit dari corpus training, lalu simpan untuk inference ---
-    tokenizer = CharTokenizer()
+    TokenizerClass = get_tokenizer_class(config.data.tokenizer)
+    tokenizer = TokenizerClass()
     train_text = load_text(config.data.train_path)
-    tokenizer.fit(train_text)
+
+    print(f"Melatih tokenizer ({config.data.tokenizer})...")
+    if config.data.tokenizer == "bpe":
+        tokenizer.fit(train_text, vocab_size=config.data.bpe_vocab_size)
+    else:
+        tokenizer.fit(train_text)
     tokenizer.save(config.data.tokenizer_path)
     config.model.vocab_size = tokenizer.vocab_size
-    print(f"Vocab size: {tokenizer.vocab_size}")
+    print(f"Tokenizer: {config.data.tokenizer} | Vocab size: {tokenizer.vocab_size}")
 
     # --- Dataset ---
+    print("Meng-encode corpus training/validasi...")
     train_ds, val_ds = make_train_val_datasets(
         tokenizer,
         config.data.train_path,
