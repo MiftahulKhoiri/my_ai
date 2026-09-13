@@ -81,6 +81,11 @@ class Config:
 
     @classmethod
     def load(cls, path: str) -> "Config":
+        if not os.path.exists(path):
+            raise FileNotFoundError(
+                f"Config tidak ditemukan: {path!r}. Pastikan sudah training dulu "
+                "(python train.py menyimpan config.json otomatis di checkpoint_dir)."
+            )
         with open(path) as f:
             raw = json.load(f)
         return cls(
