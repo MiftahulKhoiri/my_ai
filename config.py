@@ -34,6 +34,9 @@ class TrainingConfig:
     weight_decay: float = 0.1
     warmup_steps: int = 200
     grad_clip: float = 1.0
+    grad_accum_steps: int = 1             # akumulasi gradien N micro-batch sebelum
+                                           # optimizer.step() — batch efektif lebih
+                                           # besar tanpa nambah RAM per langkah
     eval_every: int = 200
     eval_iters: int = 50
     checkpoint_every: int = 500
@@ -42,6 +45,9 @@ class TrainingConfig:
     seed: int = 1337
     checkpoint_dir: str = "checkpoints"
     resume_from: Optional[str] = None
+    num_threads: Optional[int] = None      # None = biarkan PyTorch auto-detect;
+                                            # isi manual (mis. 4 di RPi5) buat kontrol
+                                            # eksplisit jumlah thread CPU intra-op
 
 
 @dataclass
