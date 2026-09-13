@@ -4,13 +4,16 @@ inference.py — Generate teks dari checkpoint yang sudah dilatih.
 Contoh pemakaian:
     python inference.py --checkpoint checkpoints/best.pt --prompt "Pada suatu hari"
     python inference.py --checkpoint checkpoints/best.pt --prompt "Halo" --num_threads 4
+
+Tokenizer (BPE atau char) otomatis dibaca dari checkpoints/config.json —
+tidak perlu diisi manual, harus sama dengan yang dipakai saat training.
 """
 
 import argparse
 import torch
 
 from config import Config
-from data.tokenizer import CharTokenizer
+from data import get_tokenizer_class
 from model.transformer import TransformerLM
 from training.checkpoint import load_checkpoint
 
@@ -40,7 +43,9 @@ def main():
         torch.set_num_threads(args.num_threads)
 
     config = Config.load(args.config_path)
-    tokenizer = CharTokenizer.load(args.tokenizer_path)
+
+    TokenizerClass = get_tokenizer_class(config.data.tokenizer)
+    tokenizer = TokenizerClass.load(args.tokenizer_path)
 
     model = TransformerLM(config.model)
     load_checkpoint(args.checkpoint, model, optimizer=None, map_location=args.device)
