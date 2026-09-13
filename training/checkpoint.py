@@ -33,6 +33,12 @@ def load_checkpoint(
     optimizer: torch.optim.Optimizer = None,
     map_location: str = "cpu",
 ):
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"Checkpoint tidak ditemukan: {path!r}. Pastikan sudah training "
+            "dulu (python train.py) dan path checkpoint-nya benar "
+            "(mis. checkpoints/best.pt atau checkpoints/final.pt)."
+        )
     ckpt = torch.load(path, map_location=map_location)
     model.load_state_dict(ckpt["model_state"])
     if optimizer is not None and "optimizer_state" in ckpt:
