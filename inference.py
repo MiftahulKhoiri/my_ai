@@ -2,7 +2,8 @@
 inference.py — Generate teks dari checkpoint yang sudah dilatih.
 
 Contoh pemakaian:
-    python inference.py --checkpoint checkpoints/best.pt --prompt "Halo dunia"
+    python inference.py --checkpoint checkpoints/best.pt --prompt "Pada suatu hari"
+    python inference.py --checkpoint checkpoints/best.pt --prompt "Halo" --num_threads 4
 """
 
 import argparse
@@ -24,11 +25,19 @@ def parse_args():
     p.add_argument("--temperature", type=float, default=0.8)
     p.add_argument("--top_k", type=int, default=40)
     p.add_argument("--device", type=str, default="cpu")
+    p.add_argument(
+        "--num_threads", type=int, default=None,
+        help="Jumlah thread CPU intra-op PyTorch (mis. 4 di Raspberry Pi 5). "
+             "Default: biarkan PyTorch auto-detect.",
+    )
     return p.parse_args()
 
 
 def main():
     args = parse_args()
+
+    if args.num_threads is not None:
+        torch.set_num_threads(args.num_threads)
 
     config = Config.load(args.config_path)
     tokenizer = CharTokenizer.load(args.tokenizer_path)
