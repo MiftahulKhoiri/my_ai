@@ -8,7 +8,12 @@ import torch.nn as nn
 
 
 class TokenAndPositionalEmbedding(nn.Module):
-    """Gabungan token embedding + learned positional embedding."""
+    """Gabungan token embedding + learned positional embedding.
+
+    `start_pos` dipakai saat decoding dengan KV-cache: token baru diberi
+    posisi absolut lanjutan (bukan selalu mulai dari 0), supaya positional
+    embedding-nya tetap konsisten dengan token-token sebelumnya di cache.
+    """
 
     def __init__(self, vocab_size: int, d_model: int, max_seq_len: int, dropout: float):
         super().__init__()
@@ -16,9 +21,9 @@ class TokenAndPositionalEmbedding(nn.Module):
         self.pos_emb = nn.Embedding(max_seq_len, d_model)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, idx: torch.Tensor) -> torch.Tensor:
+    def forward(self, idx: torch.Tensor, start_pos: int = 0) -> torch.Tensor:
         _, t = idx.shape
-        positions = torch.arange(t, device=idx.device).unsqueeze(0)  # (1, t)
+        positions = torch.arange(start_pos, start_pos + t, device=idx.device).unsqueeze(0)
         x = self.token_emb(idx) + self.pos_emb(positions)
         return self.dropout(x)
 
