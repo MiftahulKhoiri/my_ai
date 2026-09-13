@@ -4,6 +4,7 @@ train.py — Entry point untuk melatih model.
 Contoh pemakaian:
     python train.py
     python train.py --train_path data/train.txt --epochs 10 --device cuda
+    python train.py --grad_accum_steps 4 --num_threads 4
 """
 
 import argparse
@@ -29,6 +30,16 @@ def parse_args():
     p.add_argument("--max_seq_len", type=int, default=None)
     p.add_argument("--device", type=str, default=None)
     p.add_argument("--resume_from", type=str, default=None)
+    p.add_argument(
+        "--grad_accum_steps", type=int, default=None,
+        help="Akumulasi gradien N micro-batch sebelum optimizer.step() "
+             "(batch efektif = batch_size * grad_accum_steps, tanpa nambah RAM per langkah)",
+    )
+    p.add_argument(
+        "--num_threads", type=int, default=None,
+        help="Jumlah thread CPU intra-op PyTorch (mis. 4 di Raspberry Pi 5). "
+             "Default: biarkan PyTorch auto-detect.",
+    )
     return p.parse_args()
 
 
@@ -56,6 +67,10 @@ def apply_overrides(config: Config, args) -> Config:
         config.training.device = args.device
     if args.resume_from is not None:
         config.training.resume_from = args.resume_from
+    if args.grad_accum_steps is not None:
+        config.training.grad_accum_steps = args.grad_accum_steps
+    if args.num_threads is not None:
+        config.training.num_threads = args.num_threads
     return config
 
 
@@ -65,6 +80,10 @@ def main():
     config = apply_overrides(config, args)
 
     torch.manual_seed(config.training.seed)
+
+    if config.training.num_threads is not None:
+        torch.set_num_threads(config.training.num_threads)
+    print(f"PyTorch memakai {torch.get_num_threads()} thread CPU")
 
     # --- Tokenizer: fit dari corpus training, lalu simpan untuk inference ---
     tokenizer = CharTokenizer()
