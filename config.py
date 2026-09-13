@@ -56,6 +56,8 @@ class DataConfig:
     val_path: str = "data/val.txt"
     tokenizer_path: str = "checkpoints/tokenizer.json"
     val_split: float = 0.1                # dipakai kalau val_path tidak ditemukan
+    tokenizer: str = "bpe"                # "bpe" atau "char"
+    bpe_vocab_size: int = 1024            # target ukuran vocab (dipakai kalau tokenizer="bpe")
 
 
 @dataclass
