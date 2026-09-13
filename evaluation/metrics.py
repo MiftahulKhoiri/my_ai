@@ -34,7 +34,7 @@ def evaluate(model, dataloader, device: str, max_iters: int = 50):
         if i >= max_iters:
             break
         x, y = x.to(device), y.to(device)
-        logits, loss = model(x, y)
+        logits, loss, _ = model(x, y)
         losses.append(loss.item())
         accs.append(compute_accuracy(logits, y))
     model.train()
