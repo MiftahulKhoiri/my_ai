@@ -30,6 +30,11 @@ class TextDataset(Dataset):
 
 
 def load_text(path: str) -> str:
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"File data tidak ditemukan: {path!r}. Cek --train_path/--val_path "
+            "atau path di config.py sudah benar."
+        )
     with open(path, encoding="utf-8") as f:
         return f.read()
 
