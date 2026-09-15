@@ -85,7 +85,7 @@ def parse_args():
 
 def apply_overrides(config: Config, args) -> Config:
     if args.train_path:
-        config.data.train_path = args.train_path
+        config.data.train_path = args.train_dir
     if args.val_path:
         config.data.val_path = args.val_path
 
