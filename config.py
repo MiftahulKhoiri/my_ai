@@ -59,6 +59,13 @@ class DataConfig:
     tokenizer: str = "bpe"                # "bpe" atau "char"
     bpe_vocab_size: int = 1024            # target ukuran vocab (dipakai kalau tokenizer="bpe")
 
+    def get_txt_files(self) -> list[str]:
+        return sorted(
+            str(path)
+            for path in Path(self.train_dir).glob("*.txt")
+            if path.name != "val.txt"
+        )
+
 
 @dataclass
 class Config:
