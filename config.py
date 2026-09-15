@@ -6,6 +6,7 @@ sini supaya train.py dan inference.py cukup import satu sumber yang sama.
 Config bisa disimpan/dimuat sebagai JSON (dipakai lagi saat inference).
 """
 
+from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 import json
