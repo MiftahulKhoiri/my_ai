@@ -9,6 +9,7 @@ prediction: target adalah input yang digeser satu posisi ke kanan.
 import os
 import torch
 from torch.utils.data import Dataset
+from pathlib import Path
 
 from .tokenizer import CharTokenizer
 
@@ -30,13 +31,41 @@ class TextDataset(Dataset):
 
 
 def load_text(path: str) -> str:
-    if not os.path.exists(path):
+    p = Path(path)
+
+    if not p.exists():
         raise FileNotFoundError(
-            f"File data tidak ditemukan: {path!r}. Cek --train_path/--val_path "
-            "atau path di config.py sudah benar."
+            f"Path data tidak ditemukan: {path!r}. "
+            "Cek path di config.py sudah benar."
         )
-    with open(path, encoding="utf-8") as f:
-        return f.read()
+
+    # Jika path adalah satu file .txt
+    if p.is_file():
+        with open(p, "r", encoding="utf-8") as f:
+            return f.read()
+
+    # Jika path adalah folder, ambil semua .txt
+    if p.is_dir():
+        txt_files = sorted(p.rglob("*.txt"))
+
+        if not txt_files:
+            raise FileNotFoundError(
+                f"Tidak ada file .txt di dalam folder: {path!r}"
+            )
+
+        texts = []
+
+        for txt_file in txt_files:
+            print(f"Loading: {txt_file}")
+
+            with open(txt_file, "r", encoding="utf-8") as f:
+                texts.append(f.read())
+
+        return "\n\n".join(texts)
+
+    raise ValueError(
+        f"Path bukan file atau folder yang valid: {path!r}"
+    )
 
 
 def make_train_val_datasets(
