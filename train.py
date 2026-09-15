@@ -178,7 +178,7 @@ def main():
     print("Meng-encode corpus training/validasi...")
     train_ds, val_ds = make_train_val_datasets(
         tokenizer,
-        config.data.train_path,
+        config.data.train_dir,
         config.data.val_path,
         config.model.max_seq_len,
         config.data.val_split,
