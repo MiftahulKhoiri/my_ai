@@ -1,0 +1,1 @@
+kumpulan file untuk bahan training 
