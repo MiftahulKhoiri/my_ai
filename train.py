@@ -163,7 +163,7 @@ def main():
     # --- Tokenizer: fit dari corpus training, lalu simpan untuk inference ---
     TokenizerClass = get_tokenizer_class(config.data.tokenizer)
     tokenizer = TokenizerClass()
-    train_text = load_text(config.data.train_path)
+    train_text = load_text(config.data.train_dir)
 
     print(f"Melatih tokenizer ({config.data.tokenizer})...")
     if config.data.tokenizer == "bpe":
