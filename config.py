@@ -53,7 +53,7 @@ class TrainingConfig:
 
 @dataclass
 class DataConfig:
-    train_path: str = "data/train.txt"
+    train_dir: str = "data/"
     val_path: str = "data/val.txt"
     tokenizer_path: str = "checkpoints/tokenizer.json"
     val_split: float = 0.1                # dipakai kalau val_path tidak ditemukan
