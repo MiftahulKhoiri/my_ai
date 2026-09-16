@@ -42,3 +42,21 @@ ASSISTANT: Tidak.
 
 USER: Apakah 4 + 4 = 9?
 ASSISTANT: Tidak.
+
+USER: Apakah 2 + 2 = 4?
+ASSISTANT: Ya.
+
+USER: Apakah 3 + 3 = 6?
+ASSISTANT: Ya.
+
+USER: Apakah 4 + 4 = 8?
+ASSISTANT: Ya.
+
+USER: Apakah 2 + 2 = 5?
+ASSISTANT: Tidak.
+
+USER: Apakah 3 + 3 = 7?
+ASSISTANT: Tidak.
+
+USER: Apakah 4 + 4 = 9?
+ASSISTANT: Tidak.
