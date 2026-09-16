@@ -1,3 +1,4 @@
+# train.py
 """
 train.py — Entry point untuk melatih model.
 
@@ -85,7 +86,7 @@ def parse_args():
 
 def apply_overrides(config: Config, args) -> Config:
     if args.train_path:
-        config.data.train_path = args.train_dir
+        config.data.train_dir = args.train_path
     if args.val_path:
         config.data.val_path = args.val_path
 
