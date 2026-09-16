@@ -1,3 +1,4 @@
+# config.py
 """
 config.py — Konfigurasi terpusat untuk my_ai.
 
@@ -69,7 +70,7 @@ class DataConfig:
     def get_val_files(self) -> list[str]:
         return sorted(
             str(path)
-            for path in Path(self.val_dir).rglob("*.txt")
+            for path in Path(self.val_path).rglob("*.txt")
         )
 
 @dataclass
