@@ -1,0 +1,26 @@
+USER: Apakah kucing adalah hewan?
+ASSISTANT: Ya.
+
+USER: Apakah anjing adalah hewan?
+ASSISTANT: Ya.
+
+USER: Apakah burung adalah hewan?
+ASSISTANT: Ya.
+
+USER: Apakah kucing adalah tumbuhan?
+ASSISTANT: Tidak.
+
+USER: Apakah anjing adalah tumbuhan?
+ASSISTANT: Tidak.
+
+USER: Apakah burung adalah tumbuhan?
+ASSISTANT: Tidak.
+
+USER: Apakah mawar adalah tumbuhan?
+ASSISTANT: Ya.
+
+USER: Apakah pohon adalah tumbuhan?
+ASSISTANT: Ya.
+
+USER: Apakah mawar adalah hewan?
+ASSISTANT: Tidak.
