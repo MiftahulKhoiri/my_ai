@@ -86,6 +86,7 @@ class TransformerLM(nn.Module):
         max_new_tokens: int,
         temperature: float = 1.0,
         top_k: int = None,
+        eos_id: int = None,
     ) -> torch.Tensor:
         """Generate token baru secara autoregresif memakai KV-cache.
 
@@ -95,6 +96,13 @@ class TransformerLM(nn.Module):
         sebelumnya). Total posisi (prompt + token baru) dibatasi ke
         `max_seq_len`; kalau limit itu tercapai, generate berhenti lebih
         awal dan memberi peringatan, bukan diam-diam memotong konteks.
+
+        `eos_id`: kalau diisi, generate berhenti lebih awal begitu SEMUA
+        sequence di batch sudah menghasilkan token ini minimal sekali —
+        tidak perlu menunggu `max_new_tokens` penuh. Ini cuma berguna kalau
+        modelnya dilatih dengan <eos> disisipkan di data training (lihat
+        `data/dataset.py::encode_corpus`); kalau None (default), perilaku
+        sama seperti sebelumnya (selalu generate `max_new_tokens` penuh).
         """
         was_training = self.training
         self.eval()
@@ -115,6 +123,8 @@ class TransformerLM(nn.Module):
         logits, _, past_kv = self(idx, use_cache=True)
         logits = logits[:, -1, :] / max(temperature, 1e-5)
 
+        finished = torch.zeros(idx.size(0), dtype=torch.bool, device=idx.device)
+
         for _ in range(max_new_tokens):
             if top_k is not None:
                 v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
@@ -123,6 +133,11 @@ class TransformerLM(nn.Module):
             probs = F.softmax(logits, dim=-1)
             next_id = torch.multinomial(probs, num_samples=1)
             idx = torch.cat([idx, next_id], dim=1)
+
+            if eos_id is not None:
+                finished = finished | (next_id.squeeze(-1) == eos_id)
+                if finished.all():
+                    break
 
             # --- Decode 1 token baru pakai cache, bukan ulang dari awal ---
             logits, _, past_kv = self(next_id, past_kv=past_kv, use_cache=True)
