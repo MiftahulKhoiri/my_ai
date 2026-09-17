@@ -60,6 +60,7 @@ def main():
         max_new_tokens=args.max_new_tokens,
         temperature=args.temperature,
         top_k=args.top_k,
+        eos_id=tokenizer.eos_id,
     )
     text = tokenizer.decode(out[0].tolist())
     print(text)
