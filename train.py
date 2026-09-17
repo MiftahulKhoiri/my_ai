@@ -9,9 +9,24 @@ Contoh pemakaian:
     python train.py --tokenizer char          # pakai tokenizer level karakter (lama)
     python train.py --bpe_vocab_size 2048      # ukuran vocab BPE lebih besar
     python train.py --max_seq_len 32 --epochs 50 --eval_every 50 --checkpoint_every 100
+
+    # --- Alur vocab tetap + lanjut training tanpa ulang dari 0 ---
+    # 1) Training pertama: bangun vocab dari file referensi terpisah (kamus.txt),
+    #    lalu latih model dari data/training/ seperti biasa.
+    python train.py --vocab_path data/kamus.txt
+
+    # 2) Nanti nambah file percakapan baru ke data/training/, lanjut training
+    #    dari checkpoint lama. tokenizer.json sudah ada -> otomatis dipakai
+    #    ulang, TIDAK di-fit ulang, jadi checkpoint lama tetap kompatibel.
+    python train.py --resume_from checkpoints/final.pt
+
+    # Paksa fit ulang vocab dari nol (HATI-HATI: checkpoint lama jadi tidak
+    # kompatibel lagi kalau dipakai bareng --resume_from):
+    python train.py --rebuild_tokenizer
 """
 
 import argparse
+import os
 import torch
 
 from config import Config
@@ -80,6 +95,21 @@ def parse_args():
     p.add_argument(
         "--bpe_vocab_size", type=int, default=None,
         help="Target ukuran vocab BPE (dipakai kalau --tokenizer bpe).",
+    )
+    p.add_argument(
+        "--vocab_path", type=str, default=None,
+        help="Sumber teks untuk membangun vocab tokenizer, dipakai HANYA saat "
+             "tokenizer.json belum ada (mis. data/kamus.txt sebagai acuan vocab "
+             "bahasa). Kalau tidak diisi, vocab dibangun dari --train_path seperti "
+             "biasa. Diabaikan kalau tokenizer.json sudah ada -- pakai "
+             "--rebuild_tokenizer untuk memaksa fit ulang.",
+    )
+    p.add_argument(
+        "--rebuild_tokenizer", action="store_true",
+        help="Paksa fit ulang tokenizer dari awal meskipun tokenizer.json sudah "
+             "ada. HATI-HATI: ini membuat checkpoint lama tidak kompatibel lagi "
+             "kalau dipakai bareng --resume_from (vocab berubah -> ukuran "
+             "embedding beda -> load_state_dict gagal).",
     )
     return p.parse_args()
 
@@ -161,19 +191,38 @@ def main():
         torch.set_num_threads(config.training.num_threads)
     print(f"PyTorch memakai {torch.get_num_threads()} thread CPU")
 
-    # --- Tokenizer: fit dari corpus training, lalu simpan untuk inference ---
+    # --- Tokenizer ---
+    # Supaya training lanjutan (--resume_from) dengan file data baru tidak
+    # merusak checkpoint lama, tokenizer HANYA di-fit kalau memang belum ada
+    # file tokenizer tersimpan (atau kalau --rebuild_tokenizer dipaksa).
+    # Kalau sudah ada, vocab lama dipakai apa adanya supaya ukuran & isi
+    # vocab tetap konsisten dengan checkpoint model yang mau di-resume.
     TokenizerClass = get_tokenizer_class(config.data.tokenizer)
-    tokenizer = TokenizerClass()
-    train_text = load_text(config.data.train_dir)
+    tokenizer_exists = os.path.exists(config.data.tokenizer_path)
 
-    print(f"Melatih tokenizer ({config.data.tokenizer})...")
-    if config.data.tokenizer == "bpe":
-        tokenizer.fit(train_text, vocab_size=config.data.bpe_vocab_size)
+    if tokenizer_exists and not args.rebuild_tokenizer:
+        print(f"Memuat tokenizer yang sudah ada: {config.data.tokenizer_path}")
+        tokenizer = TokenizerClass.load(config.data.tokenizer_path)
+        print(
+            f"Tokenizer: {config.data.tokenizer} | Vocab size: {tokenizer.vocab_size} "
+            "(dipakai ulang, tidak di-fit ulang)"
+        )
     else:
-        tokenizer.fit(train_text)
-    tokenizer.save(config.data.tokenizer_path)
+        vocab_source = args.vocab_path or config.data.train_dir
+        print(f"Melatih tokenizer baru ({config.data.tokenizer}) dari: {vocab_source}")
+        vocab_text = load_text(vocab_source)
+        tokenizer = TokenizerClass()
+        if config.data.tokenizer == "bpe":
+            tokenizer.fit(vocab_text, vocab_size=config.data.bpe_vocab_size)
+        else:
+            tokenizer.fit(vocab_text)
+        tokenizer.save(config.data.tokenizer_path)
+        print(
+            f"Tokenizer: {config.data.tokenizer} | Vocab size: {tokenizer.vocab_size} "
+            f"(baru, tersimpan di {config.data.tokenizer_path})"
+        )
+
     config.model.vocab_size = tokenizer.vocab_size
-    print(f"Tokenizer: {config.data.tokenizer} | Vocab size: {tokenizer.vocab_size}")
 
     # --- Dataset ---
     print("Meng-encode corpus training/validasi...")
