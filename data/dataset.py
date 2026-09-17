@@ -14,10 +14,35 @@ from pathlib import Path
 from .tokenizer import CharTokenizer
 
 
+def encode_corpus(text: str, tokenizer: CharTokenizer) -> list[int]:
+    """Encode teks training, sisipkan <eos> di akhir tiap giliran percakapan.
+
+    Giliran dipisah baris kosong ("\\n\\n") — sesuai format USER:/ASSISTANT:
+    yang wajib dipakai di semua file data/training/*.txt (lihat README).
+    Tanpa ini model tidak pernah melihat token <eos> sama sekali selama
+    training (encode() default tidak menyisipkan token spesial), jadi tidak
+    mungkin belajar KAPAN harus berhenti — generate() pun tidak akan pernah
+    berhenti sendiri di <eos>.
+
+    Catatan: kalau satu jawaban ASSISTANT sendiri mengandung baris kosong di
+    tengah, itu akan salah dianggap batas giliran (jadi <eos> nyempil di
+    tengah jawaban). Hindari baris kosong di dalam satu jawaban.
+    """
+    chunks = [c for c in text.split("\n\n") if c.strip()]
+    if not chunks:
+        return tokenizer.encode(text)
+
+    ids: list[int] = []
+    for chunk in chunks:
+        ids.extend(tokenizer.encode(chunk))
+        ids.append(tokenizer.eos_id)
+    return ids
+
+
 class TextDataset(Dataset):
     def __init__(self, text: str, tokenizer: CharTokenizer, block_size: int):
         self.block_size = block_size
-        self.data = torch.tensor(tokenizer.encode(text), dtype=torch.long)
+        self.data = torch.tensor(encode_corpus(text, tokenizer), dtype=torch.long)
 
     def __len__(self) -> int:
         # -1 karena tiap sampel butuh block_size+1 token untuk (input, target)
