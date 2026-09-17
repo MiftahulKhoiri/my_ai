@@ -70,8 +70,13 @@ def load_model(args):
 
 def ask(model, tokenizer, question: str, args) -> str:
     """Format pertanyaan gaya training (USER:/ASSISTANT:), generate, lalu
-    potong jawabannya sebelum model mulai berhalusinasi bikin giliran USER
-    berikutnya sendiri."""
+    bersihkan jawabannya.
+
+    Model yang dilatih dengan data yang sudah disisipi <eos> per giliran
+    (lihat data/dataset.py::encode_corpus) akan berhenti generate SENDIRI
+    pas ketemu <eos> — decode() otomatis membuang token itu. STOP_SEQUENCE
+    di bawah cuma jaring pengaman untuk checkpoint lama (dilatih sebelum
+    ada <eos>) atau kalau model belum konsisten memunculkan <eos>."""
     prompt = f"USER: {question}\nASSISTANT:"
     prompt_ids = tokenizer.encode(prompt)
     idx = torch.tensor([prompt_ids], dtype=torch.long, device=args.device)
@@ -81,11 +86,13 @@ def ask(model, tokenizer, question: str, args) -> str:
         max_new_tokens=args.max_new_tokens,
         temperature=args.temperature,
         top_k=args.top_k,
+        eos_id=tokenizer.eos_id,
     )
     full_text = tokenizer.decode(out[0].tolist())
 
     # Ambil bagian setelah "ASSISTANT:" pertama, lalu potong sebelum giliran
-    # USER berikutnya kalau model mulai menghasilkan itu sendiri.
+    # USER berikutnya kalau model mulai menghasilkan itu sendiri (fallback
+    # buat model yang belum/tidak berhenti sendiri di <eos>).
     answer = full_text.split("ASSISTANT:", 1)[-1]
     if STOP_SEQUENCE in answer:
         answer = answer.split(STOP_SEQUENCE, 1)[0]
