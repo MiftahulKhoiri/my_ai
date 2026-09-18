@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from .optimizer import build_optimizer, build_lr_scheduler
-from .checkpoint import save_checkpoint, load_checkpoint
+from .checkpoint import save_checkpoint, load_checkpoint, rotate_checkpoints
 from evaluation.metrics import evaluate
 
 
@@ -158,6 +158,7 @@ class Trainer:
                     f"{cfg.checkpoint_dir}/step_{self.step}.pt",
                     self.model, self.optimizer, self.step, self.best_val_loss,
                 )
+                rotate_checkpoints(cfg.checkpoint_dir, cfg.keep_last_n_checkpoints)
 
             self.step += 1
             progress.update(1)
