@@ -42,6 +42,9 @@ class TrainingConfig:
     eval_every: int = 200
     eval_iters: int = 50
     checkpoint_every: int = 500
+    keep_last_n_checkpoints: Optional[int] = 3   # None atau <=0 = simpan semua
+                                                  # step_N.pt (nonaktifkan rotasi,
+                                                  # perilaku lama)
     log_every: int = 20
     device: str = "cpu"                   # "cpu", "cuda", atau "mps"
     seed: int = 1337
