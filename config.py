@@ -30,7 +30,10 @@ class ModelConfig:
 class TrainingConfig:
     batch_size: int = 32
     epochs: int = 5
-    max_steps: Optional[int] = None       # kalau diisi, override epochs
+    max_steps: Optional[int] = None       # step BARU di run ini; kalau diisi, override epochs
+    total_steps: Optional[int] = None     # horizon GLOBAL jadwal LR lintas semua file training
+                                           # bertahap. Diisi sekali di run pertama, lalu otomatis
+                                           # dikunci & dipakai ulang dari checkpoint (lihat trainer.py)
     learning_rate: float = 3e-4
     min_learning_rate: float = 3e-5
     weight_decay: float = 0.1
