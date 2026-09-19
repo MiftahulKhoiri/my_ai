@@ -1,7 +1,7 @@
 """
 training/checkpoint.py — Simpan & muat checkpoint (state model, state
-optimizer, step, dan best_val_loss) supaya training bisa dilanjutkan atau
-model bisa dipakai langsung untuk inference.
+optimizer, step, best_val_loss, dan total_steps) supaya training bisa
+dilanjutkan atau model bisa dipakai langsung untuk inference.
 """
 
 import glob
@@ -16,6 +16,7 @@ def save_checkpoint(
     optimizer: torch.optim.Optimizer,
     step: int,
     best_val_loss: float,
+    total_steps: int = None,
 ) -> None:
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     torch.save(
@@ -24,6 +25,7 @@ def save_checkpoint(
             "optimizer_state": optimizer.state_dict(),
             "step": step,
             "best_val_loss": best_val_loss,
+            "total_steps": total_steps,
         },
         path,
     )
@@ -83,4 +85,5 @@ def load_checkpoint(
     return {
         "step": ckpt.get("step", 0),
         "best_val_loss": ckpt.get("best_val_loss", float("inf")),
+        "total_steps": ckpt.get("total_steps"),  # None kalau checkpoint lama (sebelum fitur ini)
     }
