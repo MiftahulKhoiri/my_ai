@@ -59,31 +59,27 @@ class Trainer:
             self.model, config.training.learning_rate, config.training.weight_decay
         )
 
-        # --- Muat checkpoint (kalau ada) SEBELUM menghitung max_steps ---
+        # --- Muat checkpoint (kalau ada) SEBELUM menghitung max_steps/scheduler ---
         # self.step di sini adalah step KUMULATIF dari seluruh training
         # sebelumnya (lintas file, lintas pemanggilan --resume_from), bukan
         # step lokal untuk file yang sedang ditraining sekarang.
         self.step = 0
         self.best_val_loss = float("inf")
+        loaded_total_steps = None
         if config.training.resume_from:
             state = load_checkpoint(
                 config.training.resume_from, self.model, self.optimizer, self.device
             )
             self.step = state["step"]
             self.best_val_loss = state["best_val_loss"]
+            loaded_total_steps = state.get("total_steps")
             tqdm.write(f"Resume dari step {self.step}, best_val_loss={self.best_val_loss:.4f}")
 
-        # --- FIX bug "selesai tanpa training" ---
-        # SEBELUMNYA: self.max_steps dihitung ulang dari nol tiap run (dari
-        # dataset file saat itu doang), lalu dipakai LANGSUNG sebagai batas
-        # absolut buat `self.step` yang notabene kumulatif dari checkpoint.
-        # Begitu step kumulatif >= max_steps versi file baru (gampang
-        # kejadian karena tiap file kecil), loop training 0 kali jalan.
-        #
-        # SEKARANG: steps_this_run = jumlah step BARU yang mau dijalankan di
-        # run ini (dari file saat itu). self.max_steps = step kumulatif +
-        # steps_this_run, jadi tiap run DIJAMIN nambah step baru, gak peduli
-        # sebesar apa pun step kumulatif yang sudah ada.
+        # --- max_steps: batas loop untuk RUN INI SAJA ---
+        # steps_this_run = jumlah step BARU yang mau dijalankan di run ini.
+        # self.max_steps = step kumulatif + steps_this_run, jadi tiap run
+        # DIJAMIN nambah step baru, gak peduli sebesar apa pun step kumulatif
+        # yang sudah ada (fix bug "selesai tanpa training").
         steps_this_run = config.training.max_steps or (
             len(self.train_loader) * config.training.epochs
         )
@@ -94,15 +90,43 @@ class Trainer:
             )
         self.max_steps = self.step + steps_this_run
 
+        # --- total_steps: horizon GLOBAL jadwal learning-rate ---
+        # Dikunci sejak run pertama (disimpan di checkpoint), supaya warmup
+        # cuma kejadian sekali di awal seluruh rencana training bertahap, dan
+        # cosine decay berlanjut mulus lintas file alih-alih reset tiap file.
+        if loaded_total_steps is not None:
+            self.total_steps = loaded_total_steps
+            if (
+                config.training.total_steps is not None
+                and config.training.total_steps != loaded_total_steps
+            ):
+                tqdm.write(
+                    f"[peringatan] --total_steps={config.training.total_steps} "
+                    f"diabaikan — checkpoint sudah punya total_steps="
+                    f"{loaded_total_steps} (dikunci sejak run pertama, supaya "
+                    "kurva learning-rate tidak berubah di tengah jalan)."
+                )
+        elif config.training.total_steps is not None:
+            self.total_steps = config.training.total_steps
+        else:
+            # Belum pernah diisi & gak ada checkpoint lama -> fallback ke
+            # perilaku lama: siklus warmup+decay cuma sepanjang run ini.
+            self.total_steps = self.max_steps
+            tqdm.write(
+                "[info] --total_steps tidak diisi -> jadwal learning-rate cuma "
+                f"sepanjang run ini ({steps_this_run} step). Kalau rencananya "
+                "training bertahap lintas banyak file, isi --total_steps sekali "
+                "di run pertama (mis. estimasi total step semua file) supaya "
+                "warmup cuma sekali & decay kontinu sampai file terakhir."
+            )
+
         self.scheduler = build_lr_scheduler(
             self.optimizer,
             warmup_steps=config.training.warmup_steps,
-            max_steps=steps_this_run,  # panjang jadwal LR = step BARU di run
-                                        # ini, bukan target absolut, supaya
-                                        # warmup+decay tetap sinkron dengan
-                                        # jumlah iterasi yang benar-benar jalan.
+            max_steps=self.total_steps,
             max_lr=config.training.learning_rate,
             min_lr=config.training.min_learning_rate,
+            last_epoch=self.step - 1,  # lanjut dari posisi kumulatif, bukan reset
         )
 
         os.makedirs(config.training.checkpoint_dir, exist_ok=True)
@@ -134,6 +158,7 @@ class Trainer:
             save_checkpoint(
                 f"{cfg.checkpoint_dir}/best.pt",
                 self.model, self.optimizer, self.step, self.best_val_loss,
+                total_steps=self.total_steps,
             )
 
     def train(self):
@@ -181,6 +206,7 @@ class Trainer:
                 save_checkpoint(
                     f"{cfg.checkpoint_dir}/step_{self.step}.pt",
                     self.model, self.optimizer, self.step, self.best_val_loss,
+                    total_steps=self.total_steps,
                 )
                 rotate_checkpoints(cfg.checkpoint_dir, cfg.keep_last_n_checkpoints)
 
@@ -192,5 +218,6 @@ class Trainer:
         save_checkpoint(
             f"{cfg.checkpoint_dir}/final.pt",
             self.model, self.optimizer, self.step, self.best_val_loss,
+            total_steps=self.total_steps,
         )
         tqdm.write("Training selesai. Checkpoint akhir tersimpan (final.pt & best.pt).")
