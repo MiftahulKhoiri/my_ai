@@ -30,8 +30,18 @@ def build_lr_scheduler(
     max_steps: int,
     max_lr: float,
     min_lr: float,
+    last_epoch: int = -1,
 ):
-    """Warmup linear sampai `max_lr`, lalu cosine decay turun ke `min_lr`."""
+    """Warmup linear sampai `max_lr`, lalu cosine decay turun ke `min_lr`.
+
+    `max_steps` di sini adalah HORIZON GLOBAL jadwal LR (mis. total_steps
+    lintas semua file training bertahap), bukan cuma step run saat ini.
+
+    `last_epoch` dipakai buat melanjutkan posisi jadwal LR waktu resume:
+    isi dengan (step_kumulatif - 1), BUKAN dibiarkan -1, supaya warmup cuma
+    kejadian sekali di awal seluruh rencana training, dan cosine decay
+    berlanjut mulus dari posisi terakhir alih-alih reset tiap file.
+    """
 
     def lr_lambda(step: int) -> float:
         if step < warmup_steps:
@@ -43,4 +53,4 @@ def build_lr_scheduler(
         scaled_min = min_lr / max_lr
         return scaled_min + (1 - scaled_min) * coeff
 
-    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda, last_epoch=last_epoch)
