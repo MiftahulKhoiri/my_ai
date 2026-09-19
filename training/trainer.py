@@ -59,23 +59,12 @@ class Trainer:
             self.model, config.training.learning_rate, config.training.weight_decay
         )
 
-        self.max_steps = config.training.max_steps or (
-            len(self.train_loader) * config.training.epochs
-        )
-        self.scheduler = build_lr_scheduler(
-            self.optimizer,
-            warmup_steps=config.training.warmup_steps,
-            max_steps=self.max_steps,
-            max_lr=config.training.learning_rate,
-            min_lr=config.training.min_learning_rate,
-        )
-
+        # --- Muat checkpoint (kalau ada) SEBELUM menghitung max_steps ---
+        # self.step di sini adalah step KUMULATIF dari seluruh training
+        # sebelumnya (lintas file, lintas pemanggilan --resume_from), bukan
+        # step lokal untuk file yang sedang ditraining sekarang.
         self.step = 0
         self.best_val_loss = float("inf")
-
-        os.makedirs(config.training.checkpoint_dir, exist_ok=True)
-        self.log_path = os.path.join(config.training.checkpoint_dir, "train_log.jsonl")
-
         if config.training.resume_from:
             state = load_checkpoint(
                 config.training.resume_from, self.model, self.optimizer, self.device
@@ -83,6 +72,41 @@ class Trainer:
             self.step = state["step"]
             self.best_val_loss = state["best_val_loss"]
             tqdm.write(f"Resume dari step {self.step}, best_val_loss={self.best_val_loss:.4f}")
+
+        # --- FIX bug "selesai tanpa training" ---
+        # SEBELUMNYA: self.max_steps dihitung ulang dari nol tiap run (dari
+        # dataset file saat itu doang), lalu dipakai LANGSUNG sebagai batas
+        # absolut buat `self.step` yang notabene kumulatif dari checkpoint.
+        # Begitu step kumulatif >= max_steps versi file baru (gampang
+        # kejadian karena tiap file kecil), loop training 0 kali jalan.
+        #
+        # SEKARANG: steps_this_run = jumlah step BARU yang mau dijalankan di
+        # run ini (dari file saat itu). self.max_steps = step kumulatif +
+        # steps_this_run, jadi tiap run DIJAMIN nambah step baru, gak peduli
+        # sebesar apa pun step kumulatif yang sudah ada.
+        steps_this_run = config.training.max_steps or (
+            len(self.train_loader) * config.training.epochs
+        )
+        if steps_this_run <= 0:
+            raise ValueError(
+                "steps_this_run <= 0 (cek --epochs/--max_steps) — run ini "
+                "tidak akan menjalankan step baru sama sekali."
+            )
+        self.max_steps = self.step + steps_this_run
+
+        self.scheduler = build_lr_scheduler(
+            self.optimizer,
+            warmup_steps=config.training.warmup_steps,
+            max_steps=steps_this_run,  # panjang jadwal LR = step BARU di run
+                                        # ini, bukan target absolut, supaya
+                                        # warmup+decay tetap sinkron dengan
+                                        # jumlah iterasi yang benar-benar jalan.
+            max_lr=config.training.learning_rate,
+            min_lr=config.training.min_learning_rate,
+        )
+
+        os.makedirs(config.training.checkpoint_dir, exist_ok=True)
+        self.log_path = os.path.join(config.training.checkpoint_dir, "train_log.jsonl")
 
     def _infinite_loader(self):
         while True:
