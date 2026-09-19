@@ -23,6 +23,21 @@ Contoh pemakaian:
     # Paksa fit ulang vocab dari nol (HATI-HATI: checkpoint lama jadi tidak
     # kompatibel lagi kalau dipakai bareng --resume_from):
     python train.py --rebuild_tokenizer
+
+    # --- Training bertahap lintas banyak file (mis. 20 file terpisah) ---
+    # 1) File pertama: isi --total_steps SEKALI dengan estimasi total step
+    #    seluruh rencana (mis. ~250 step/file x 20 file = 5000). Ini jadi
+    #    horizon jadwal learning-rate (warmup+cosine decay) buat SELURUH
+    #    training bertahap, bukan cuma file ini.
+    python train.py --vocab_path qa_percakapan_1000_variasi.txt \
+        --train_path data/training/qa_percakapan_part01.txt --total_steps 5000
+
+    # 2) File ke-2 dst: TIDAK perlu isi --total_steps lagi -- otomatis
+    #    kebaca dari checkpoint (dikunci sejak run pertama), jadi warmup
+    #    cuma kejadian sekali di file 1, dan cosine decay lanjut mulus
+    #    sampai file terakhir alih-alih reset tiap file.
+    python train.py --resume_from checkpoints/final.pt \
+        --train_path data/training/qa_percakapan_part02.txt
 """
 
 import argparse
@@ -44,7 +59,16 @@ def parse_args():
     p.add_argument("--epochs", type=int, default=None)
     p.add_argument(
         "--max_steps", type=int, default=None,
-        help="Jumlah step training eksplisit; kalau diisi, override --epochs.",
+        help="Jumlah step BARU di run ini; kalau diisi, override --epochs.",
+    )
+    p.add_argument(
+        "--total_steps", type=int, default=None,
+        help="Horizon GLOBAL jadwal learning-rate (warmup+cosine decay) lintas "
+             "SELURUH rencana training bertahap (semua file, semua run). Isi "
+             "sekali di run pertama; run berikutnya otomatis pakai nilai yang "
+             "sama dari checkpoint (diabaikan kalau diisi ulang dengan nilai "
+             "beda -- akan muncul peringatan). Kalau tidak diisi sama sekali, "
+             "tiap run punya siklus warmup+decay sendiri-sendiri (perilaku lama).",
     )
     p.add_argument("--batch_size", type=int, default=None)
     p.add_argument("--learning_rate", type=float, default=None)
@@ -124,6 +148,8 @@ def apply_overrides(config: Config, args) -> Config:
         config.training.epochs = args.epochs
     if args.max_steps is not None:
         config.training.max_steps = args.max_steps
+    if args.total_steps is not None:
+        config.training.total_steps = args.total_steps
     if args.batch_size is not None:
         config.training.batch_size = args.batch_size
     if args.learning_rate is not None:
